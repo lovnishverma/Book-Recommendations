@@ -1,5 +1,5 @@
 ---
-title: Movies Recommendation
+title: Books Recommendation
 emoji: 📚
 colorFrom: indigo
 colorTo: green
