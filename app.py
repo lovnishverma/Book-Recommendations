@@ -800,7 +800,7 @@ with gr.Blocks(title="📚 AI Book Recommender", theme=gr.themes.Soft()) as app:
             analytics = gr.Markdown()
 
     # Info modal
-    with gr.Box(visible=False) as info_box:
+    with gr.Accordion("ℹ️ How This Recommender Works", visible=False, open=True) as info_box:
         gr.Markdown("""
         ### 🤖 How Our AI Recommender Works
         - **Semantic Understanding**: Uses AI to understand book content and your preferences
