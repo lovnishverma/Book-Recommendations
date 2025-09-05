@@ -42,11 +42,20 @@ class AdvancedGoodreadsRecommender:
         self.genre_scaler = MinMaxScaler()
         self.book_networks = {}
         self.similarity_cache = {}
+        self.max_cache_size = 1000
         self.cache_ttl = pd.Timedelta(minutes=30)
+
+        # Initialize caches and stats
+        self.recommendation_cache = {}
+        self.search_history = []
         self.recommendation_stats = {
             'total_searches': 0,
-            'failed_searches': 0
+            'successful_searches': 0,
+            'failed_searches': 0,
+            'cache_hits': 0
         }
+        self.author_similarity = {}
+
         self.genre_keywords = {
             'fantasy': ['fantasy', 'magic', 'dragon', 'wizard', 'elf', 'sword', 'quest'],
             'science_fiction': ['science fiction', 'sci-fi', 'space', 'alien', 'future', 'robot', 'cyber'],
@@ -100,13 +109,20 @@ class AdvancedGoodreadsRecommender:
                 'work_ratings_count': (0, np.inf),
                 'work_text_reviews_count': (0, np.inf),
                 'publication_year': (1000, 2025),
-                'num_pages': (1, 10000)
+                'num_pages': (1, 10000),
+                'ratings_1': (0, np.inf),
+                'ratings_2': (0, np.inf),
+                'ratings_3': (0, np.inf),
+                'ratings_4': (0, np.inf),
+                'ratings_5': (0, np.inf),
+                'books_count': (1, np.inf)
             }
 
             for field, (min_val, max_val) in numeric_fields.items():
                 if field in self.df.columns:
                     self.df[field] = pd.to_numeric(self.df[field], errors='coerce')
                     self.df = self.df[(self.df[field] >= min_val) & (self.df[field] <= max_val)]
+                    self.df[field] = self.df[field].fillna(0)
 
             # Create title-author hash for deduplication
             self.df['title_author_hash'] = (self.df['title'].astype(str) + '_' + self.df['authors'].astype(str)).apply(
@@ -266,7 +282,7 @@ class AdvancedGoodreadsRecommender:
                 similar_genre_books = self.df[genre_mask].index.tolist()
                 similar_books.extend(similar_genre_books[:5])
 
-            self.book_networks[idx] = list(set(similar_genre_books) - {idx})[:10]
+            self.book_networks[idx] = list(set(similar_books) - {idx})[:10]
 
     def _detect_genres_batch(self) -> pd.Series:
         """Batch detect genres using keyword matching"""
@@ -289,38 +305,31 @@ class AdvancedGoodreadsRecommender:
         try:
             mask = np.ones(len(self.df), dtype=bool)
 
-            # Rating filter
             if 'average_rating' in self.df.columns:
                 mask &= self.df['average_rating'] >= min_rating
 
-            # Popularity filter
             if 'ratings_count' in self.df.columns:
                 popularity_mask = self.df['ratings_count'] >= min_popularity
                 mask &= popularity_mask
 
-            # Year filter
             if 'publication_year' in self.df.columns:
                 year_mask = ((self.df['publication_year'] >= year_start) &
                            (self.df['publication_year'] <= year_end))
                 mask &= year_mask
 
-            # Author filter
             if author_filter:
                 author_mask = self.df['authors'].str.contains(author_filter, case=False, na=False)
                 mask &= author_mask
 
-            # Exclude authors
             if exclude_authors:
                 for author in exclude_authors:
                     exclude_mask = ~self.df['authors'].str.contains(author, case=False, na=False)
                     mask &= exclude_mask
 
-            # Language filter
             if language_filter:
                 language_mask = self.df['language_code'].str.contains(language_filter, case=False, na=False)
                 mask &= language_mask
 
-            # Page count filter
             if max_pages and 'num_pages' in self.df.columns:
                 page_mask = ((self.df['num_pages'] <= max_pages) | (self.df['num_pages'].isna()))
                 mask &= page_mask
@@ -458,6 +467,9 @@ class AdvancedGoodreadsRecommender:
             # Cache result
             result = (final_scores, score_components)
             self.similarity_cache[cache_key] = (result, datetime.now())
+            if len(self.similarity_cache) > self.max_cache_size:
+                oldest_key = min(self.similarity_cache.keys(), key=lambda k: self.similarity_cache[k][1])
+                del self.similarity_cache[oldest_key]
             return result
 
         except Exception as e:
@@ -484,7 +496,6 @@ class AdvancedGoodreadsRecommender:
                 decade = book['decade']
                 genres = book.get('detected_genres', [])
 
-                # Boost diversity
                 if (author not in selected_authors or
                     decade not in selected_decades or
                     any(g not in selected_genres for g in genres)):
@@ -510,26 +521,21 @@ class AdvancedGoodreadsRecommender:
             explanations = []
             book = self.df.iloc[idx]
 
-            # Semantic match
             if 'semantic' in score_components and score_components['semantic'][idx] > 0.7:
                 explanations.append("Excellent semantic match")
 
-            # High rating
             if book.get('average_rating', 0) > 4.3:
                 explanations.append("Outstanding rating (4.4+)")
 
-            # Genre match
             if 'genre_match' in score_components and score_components['genre_match'][idx] > 0.5:
                 genre = next((g for g in book.get('detected_genres', []) if g in self.genre_keywords), 'genre')
                 explanations.append(f"{genre.replace('_', ' ').title()} genre match")
 
-            # Popularity
             if book.get('ratings_count', 0) > 10000:
                 explanations.append("Highly popular book")
 
             top_explanations = explanations[:2] or ["Content similarity"]
-            score_text = f"(Score: {similarity_score:.3f})"
-            return f"{' • '.join(top_explanations)} {score_text}"
+            return f"{' • '.join(top_explanations)} (Score: {similarity_score:.3f})"
         except Exception as e:
             logger.error(f"Error explaining recommendation: {e}")
             return f"Content similarity (Score: {similarity_score:.3f})"
@@ -537,11 +543,16 @@ class AdvancedGoodreadsRecommender:
     def get_recommendation_statistics(self) -> Dict:
         """Get detailed statistics about the recommendation system"""
         return {
-            'total_books': len(self.df),
+            'total_books': len(self.df) if self.df is not None else 0,
             'embedding_dimension': self.embeddings.shape[1] if self.embeddings is not None else 0,
             'cache_size': len(self.recommendation_cache),
             'similarity_cache_size': len(self.similarity_cache),
-            'failed_searches': self.recommendation_stats['failed_searches']
+            'total_searches': self.recommendation_stats.get('total_searches', 0),
+            'successful_searches': self.recommendation_stats.get('successful_searches', 0),
+            'failed_searches': self.recommendation_stats.get('failed_searches', 0),
+            'cache_hits': self.recommendation_stats.get('cache_hits', 0),
+            'book_networks': len(self.book_networks),
+            'author_networks': len(self.author_similarity)
         }
 
 
@@ -666,10 +677,8 @@ def get_enhanced_recommendations(user_input: str, num_recommendations: int = 12,
         if recommender is None:
             return "❌ **Error:** Recommender not initialized. Please check logs.", ""
 
-        # Parse exclude authors
         exclude_list = [a.strip() for a in exclude_authors.split(',') if a.strip()] if exclude_authors else None
 
-        # Apply filters
         filter_mask = recommender.apply_filters(
             min_rating=min_rating, min_popularity=min_popularity,
             year_start=year_start, year_end=year_end,
@@ -679,7 +688,6 @@ def get_enhanced_recommendations(user_input: str, num_recommendations: int = 12,
         if not filter_mask.any():
             return "❌ **No books match your filters. Try relaxing the criteria.**", ""
 
-        # Get similarity scores
         similarity_scores, score_components = recommender.enhanced_similarity_search(user_input, num_candidates=min(1000, len(recommender.df)))
         filtered_scores = np.where(filter_mask, similarity_scores, -1)
         top_indices = filtered_scores.argsort()[-(num_recommendations * (3 if diversity else 2)):][::-1]
@@ -688,23 +696,20 @@ def get_enhanced_recommendations(user_input: str, num_recommendations: int = 12,
         if len(top_indices) == 0:
             return "❌ **No similar books found. Try a different search term or adjust filters.**", ""
 
-        # Apply diversity or limit
         if diversity and len(top_indices) > num_recommendations:
             top_indices = recommender._apply_diversity_boosting(top_indices, num_recommendations)
         else:
             top_indices = top_indices[:num_recommendations]
 
-        # Optional reranking
         if rerank and 'popularity_score' in recommender.df.columns:
             pop_scores = recommender.df.iloc[top_indices]['popularity_score'].values
             top_indices = top_indices[np.argsort(-pop_scores)]
 
-        # Get detailed recommendations
         recommendations = []
         for i, idx in enumerate(top_indices):
             book_details = recommender.get_enhanced_book_details(idx)
             book_details['rank'] = i + 1
-            book_details['similarity_score'] = float(similarity_scores[idx])
+            book_details['similarity_score'] = similarity_scores[idx]
             if include_explanations:
                 book_details['explanation'] = recommender.explain_recommendation(
                     idx, score_components, similarity_scores[idx]
@@ -712,7 +717,6 @@ def get_enhanced_recommendations(user_input: str, num_recommendations: int = 12,
             book_details['score_breakdown'] = {k: float(v[idx]) for k, v in score_components.items()}
             recommendations.append(book_details)
 
-        # Format output
         formatted_recs = format_enhanced_recommendations(recommendations)
         analytics = generate_search_analytics(user_input, recommendations, recommender)
 
@@ -800,18 +804,22 @@ with gr.Blocks(title="📚 AI Book Recommender", theme=gr.themes.Soft()) as app:
             analytics = gr.Markdown()
 
     # Info modal
-    with gr.Accordion("ℹ️ How This Recommender Works", visible=False, open=True) as info_box:
+    with gr.Accordion("ℹ️ How This Recommender Works", visible=False) as info_box:
         gr.Markdown("""
-        ### 🤖 How Our AI Recommender Works
-        - **Semantic Understanding**: Uses AI to understand book content and your preferences
-        - **Multi-Algorithm Ranking**: Combines semantic, TF-IDF, and popularity signals
-        - **Diversity Control**: Avoids recommending 10 books from the same author
-        - **Real-Time Filtering**: Apply custom filters for ratings, years, and more
+        ### 🤖 How Our AI Book Recommender Works
 
-        **💡 Pro Tips**:
-        - Be specific: "mystery novels set in Victorian England"
-        - Use mood: "emotional tear-jerkers" or "feel-good stories"
-        - Combine genres: "sci-fi romance" or "historical fantasy"
+        This system combines **semantic search**, **content analysis**, and **user preferences** to give smart, personalized book suggestions.
+
+        ### 🔍 Key Features
+        - **Semantic Matching**: Understands meaning, not just keywords
+        - **Quality Filtering**: Prioritizes well-rated, popular books
+        - **Diversity**: Recommends varied authors and genres
+        - **Real-Time Controls**: Filter by year, rating, author, and more
+
+        ### 💡 Tips for Best Results
+        - Try: _"Books like The Martian with humor and science"_
+        - Try: _"Dark fantasy with dragons and political intrigue"_
+        - Try: _"Feel-good romance set in a small town"_
         """)
 
     # Connect event handlers
@@ -829,10 +837,10 @@ with gr.Blocks(title="📚 AI Book Recommender", theme=gr.themes.Soft()) as app:
         include_exp, diversity, rerank, analytics
     ])
 
-    info_btn.click(lambda: gr.update(visible=True), outputs=info_box)
+    info_btn.click(fn=lambda: gr.update(visible=True), outputs=info_box)
 
     # System status
-    if recommender:
+    if recommender and hasattr(recommender, 'df'):
         system_stats = recommender.get_recommendation_statistics()
         gr.Markdown(f"""
         ### 🤖 **AI System Status**
