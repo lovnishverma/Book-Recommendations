@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -567,9 +566,11 @@ def create_advanced_interface():
                 🛒 <strong>Book Access:</strong> Amazon links for purchasing • Anna's Archive for free eBook searches<br>
                 ⚠️ <em>Educational purposes only. Respect copyright laws and support authors when possible.</em>
             </p>
+             <p style="color: #888; font-size: 0.9em; margin-top:10px;">
+                 &copy; 2025 Lovnish Verma, NIELIT Chandigarh
+             </p>
         </div>
-        """)
-    
+
     return interface
 
 # Launch the application
