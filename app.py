@@ -318,13 +318,20 @@ def format_recommendations(recommendations: List[Dict]) -> str:
         return "No recommendations found."
     if "error" in recommendations[0]:
         return f"❌ **Error:** {recommendations[0]['error']}"
+    
     formatted = []
-    for i, book in enumerate(recommendations,1):
+    for i, book in enumerate(recommendations, 1):
         amazon_query = '+'.join(book['title'].split())
         authors_query = '+'.join(book['authors'].split())
+        
+        # Use small_image_url if available, else fallback to image_url
+        img_url = book['small_image_url'] if book['small_image_url'] else book['image_url']
+        
         book_entry = f"""
 ## **{i}. {book['title']}**
 {f"*Original: {book['original_title']}*" if book['original_title'] != book['title'] else ""}
+
+![Book Cover]({img_url})
 
 **👤 Author:** {book['authors']}  
 **📅 Published:** {book['publication_year']} ({book['decade']}s)  
@@ -346,7 +353,9 @@ def format_recommendations(recommendations: List[Dict]) -> str:
 ---
 """
         formatted.append(book_entry)
+    
     return "\n".join(formatted)
+
 
 
 
