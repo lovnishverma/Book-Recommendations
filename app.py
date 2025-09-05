@@ -570,6 +570,7 @@ def create_advanced_interface():
                  &copy; 2025 Lovnish Verma, NIELIT Chandigarh
              </p>
         </div>
+        """)
 
     return interface
 
