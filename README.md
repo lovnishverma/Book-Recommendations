@@ -9,7 +9,8 @@ app_file: app.py
 pinned: true
 thumbnail: >-
   https://cdn-uploads.huggingface.co/production/uploads/6474405f90330355db146c76/uCiC_ILzv0UUhGHSOBVzJ.jpeg
-short_description: Enter a book title or author to get 5 similar book recommend
+short_description: Enter a book details to get similar books recommendations.
+license: mit
 ---
 
 
@@ -182,5 +183,3 @@ MIT License – free to use for educational and personal purposes. Please respec
 ## ⚠️ Disclaimer
 
 This app is **for educational and recommendation purposes only**. eBook links should be used responsibly and legally. Support authors and purchase books whenever possible.
-
-
