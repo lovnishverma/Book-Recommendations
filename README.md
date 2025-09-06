@@ -91,27 +91,31 @@ This isn't just another book recommendation system! Our AI-powered platform comb
 
 Our recommendation system uses a sophisticated **hybrid approach**:
 
-```mermaid
-graph TD
-    A[User Query] --> B[Semantic Analysis]
-    A --> C[Keyword Matching]
-    A --> D[Popularity Scoring]
-    A --> E[Rating Analysis]
-    
-    B --> F[Sentence Transformers<br/>all-MiniLM-L6-v2]
-    C --> G[TF-IDF Vectorization]
-    D --> H[Log-based Popularity]
-    E --> I[Rating Distribution]
-    
-    F --> J[Weighted Hybrid Score]
-    G --> J
-    H --> J
-    I --> J
-    
-    J --> K[Apply Filters]
-    K --> L[Top Recommendations]
-    L --> M[Generate Explanations]
-    M --> N[Beautiful Results]
+```
+📝 User Query
+    ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    🔄 PROCESSING PIPELINE                   │
+├─────────────────┬─────────────────┬─────────────────────────┤
+│  🧠 Semantic    │  🔍 Keyword     │  📊 Quality & Pop.      │
+│  Analysis       │  Matching       │  Scoring                │
+│                 │                 │                         │
+│  Sentence       │  TF-IDF         │  • Popularity Score     │
+│  Transformers   │  Vectorization  │  • Rating Analysis      │
+│  (all-MiniLM)   │  (1-3 grams)    │  • Distribution Quality │
+└─────────────────┴─────────────────┴─────────────────────────┘
+                            ↓
+                  ⚖️  WEIGHTED HYBRID SCORING
+                            ↓
+                   🎛️  APPLY USER FILTERS
+                   • Min Rating  • Year Range
+                   • Min Pop.    • Author Filter
+                            ↓
+                  🏆  TOP RECOMMENDATIONS
+                            ↓
+                   💡  GENERATE EXPLANATIONS
+                            ↓
+                   ✨  BEAUTIFUL RESULTS
 ```
 
 ### 🎯 **Scoring Algorithm**
@@ -122,6 +126,41 @@ Final Score = 0.45 × Semantic Similarity +
               0.10 × Rating Score +
               0.05 × Rating Distribution Quality
 ```
+
+### 🔄 **Step-by-Step Process**
+
+1. **📝 Input Processing**
+   - Clean and normalize user query
+   - Extract keywords and themes
+   
+2. **🧠 Semantic Analysis** 
+   - Generate embeddings using Sentence Transformers
+   - Calculate cosine similarity with book embeddings
+   
+3. **🔍 Keyword Matching**
+   - TF-IDF vectorization of query and book texts
+   - Compute keyword-based similarity scores
+   
+4. **📊 Quality Scoring**
+   - Popularity: Log-transformed ratings count + reviews
+   - Rating: Normalized average ratings
+   - Distribution: Weighted rating quality score
+   
+5. **⚖️ Hybrid Scoring**
+   - Combine all scores with optimized weights
+   - Balance relevance with quality and popularity
+   
+6. **🎛️ Filtering**
+   - Apply user-defined filters
+   - Remove books that don't meet criteria
+   
+7. **🏆 Ranking & Selection**
+   - Sort by final hybrid scores
+   - Select top N recommendations
+   
+8. **💡 Explanation Generation**
+   - Analyze why each book was recommended
+   - Generate human-readable explanations
 
 ---
 
