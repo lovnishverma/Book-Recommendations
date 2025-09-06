@@ -279,7 +279,7 @@ class AdvancedGoodreadsRecommender:
                        include_explanations: bool = True) -> List[Dict]:
         if not user_input.strip():
             return [{"error":"Please enter a search query (book title, author, or description)."}]
-        cache_key = f"{user_input}_{num_recommendations}_{min_rating}_{min_popularity}_{year_range}_{author_filter}"
+        cache_key = f"{user_input}_{num_recommendations}_{min_rating}_{min_popularity}_{year_range}_{author_filter}_{include_explanations}"
         if cache_key in self.recommendation_cache:
             return self.recommendation_cache[cache_key]
         try:
@@ -296,6 +296,7 @@ class AdvancedGoodreadsRecommender:
             for idx in top_indices:
                 book_details = self.get_book_details(idx)
                 book_details['similarity_score'] = f"{similarity_scores[idx]:.4f}"
+                book_details['include_explanations'] = include_explanations  # Add this flag
                 if include_explanations:
                     book_details['explanation'] = self.explain_recommendation(user_input, idx, similarity_scores[idx])
                 recommendations.append(book_details)
@@ -326,6 +327,9 @@ def format_recommendations(recommendations: List[Dict]) -> str:
         # Use small_image_url if available, else fallback to image_url
         img_url = book['small_image_url'] if book['small_image_url'] else book['image_url']
         
+        # Check if explanations should be included
+        include_explanations = book.get('include_explanations', True)
+        
         book_entry = f"""
 ## **{i}. {book['title']}**
 {f"*Original: {book['original_title']}*" if book['original_title'] != book['title'] else ""}
@@ -339,8 +343,13 @@ def format_recommendations(recommendations: List[Dict]) -> str:
 **💬 Reviews:** {book['work_text_reviews_count']:,}  
 
 **🎯 Match Score:** {book['similarity_score']}  
-**💡 Why recommended:** {book.get('explanation', 'Content similarity')}
-
+"""
+        
+        # Only add explanation if the flag is True
+        if include_explanations and 'explanation' in book:
+            book_entry += f"**💡 Why recommended:** {book['explanation']}\n\n"
+        
+        book_entry += f"""
 **📈 Rating Distribution:** {book['rating_breakdown']}
 
 **📚 Book ID:** {book['book_id']} | **📖 ISBN:** {book['isbn']}
@@ -354,8 +363,6 @@ def format_recommendations(recommendations: List[Dict]) -> str:
         formatted.append(book_entry)
     
     return "\n".join(formatted)
-
-
 
 
 def get_dataset_stats():
