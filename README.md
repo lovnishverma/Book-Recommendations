@@ -1,3 +1,12 @@
+---
+license: mit
+title: 📚 Advanced Book Recommendation System
+sdk: gradio
+emoji: 📚
+colorFrom: green
+colorTo: indigo
+short_description: Discover Next favorite book with AI-powered recommendation
+---
 # 📚 Advanced Book Recommendation System
 
 ![Books Recommendation](https://cdn-uploads.huggingface.co/production/uploads/6474405f90330355db146c76/uCiC_ILzv0UUhGHSOBVzJ.jpeg)
